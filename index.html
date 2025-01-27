@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VK Music</title>
+    <script src="https://vk.com/js/api/openapi.js?169"></script>
+    <script src="https://cdn.jsdelivr.net/npm/progressbar.js@1.1.0/dist/progressbar.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background-color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            gap: 30px;
+        }
+
+        .square {
+            width: 500px;
+            height: 500px;
+            background-color: #2d2d2d;
+            border-radius: 30px;
+            box-shadow: 
+                0 0 20px rgba(0, 0, 0, 0.5),
+                0 0 40px rgba(0, 0, 0, 0.3),
+                0 0 60px rgba(0, 0, 0, 0.2),
+                inset 0 0 30px rgba(0, 0, 0, 0.4);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            padding: 20px;
+        }
+
+        .music-info {
+            text-align: center;
+        }
+
+        .track-cover {
+            width: 300px;
+            height: 300px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .track-name {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .artist-name {
+            font-size: 18px;
+            color: #888;
+        }
+
+        .square {
+            width: 300px;
+            height: 300px;
+        }
+        .track-cover {
+            width: 150px;
+            height: 150px;
+        }
+        .track-name {
+            font-size: 20px;
+        }
+        .artist-name {
+            font-size: 16px;
+        }
+
+        #progress-container {
+            width: 300px;
+            height: 10px;
+            margin: 20px 0;
+        }
+    
+        .time-info {
+            display: flex;
+            justify-content: space-between;
+            width: 300px;
+            font-size: 14px;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    
+    <div class="square">
+        <div class="music-info">
+            <img class="track-cover" id="cover" src="default.png" alt="Track Cover">
+            <div class="track-name" id="track">Loading...</div>
+            <div class="artist-name" id="artist"></div>
+            <div id="progress-container"></div>
+            <div class="time-info">
+                <span id="current-time">0:00</span>
+                <span id="duration">0:00</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const VK_USER_ID = '00000000'; // your id for vk account
+        const ACCESS_TOKEN = 'your token'; // your token for vk account (permissions: audio)
+        let startTime = 0;
+        let duration = 0;
+        let progressBar;
+        let lastTrackId = null;
+        let isPlaying = false;
+        let lastAudioStatus = null;
+        let checkInterval;
+
+        progressBar = new ProgressBar.Line('#progress-container', {
+            strokeWidth: 2,
+            easing: 'easeInOut',
+            duration: 1000,
+            color: '#1DB954',
+            trailColor: '#444',
+            trailWidth: 2,
+            svgStyle: {
+                borderRadius: '10px'
+            }
+        });
+
+        function formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = Math.floor(seconds % 60);
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function updateProgress() {
+            if (!isPlaying) return;
+            
+            if (startTime && duration) {
+                const elapsedTime = Math.min((Date.now() - startTime) / 1000, duration);
+                const progress = elapsedTime / duration;
+                
+                progressBar.set(progress);
+                document.getElementById('current-time').textContent = formatTime(elapsedTime);
+                document.getElementById('duration').textContent = formatTime(duration);
+            }
+        }
+
+        function stopTrack() {
+            isPlaying = false;
+            clearInterval(checkInterval);
+            const currentTime = document.getElementById('current-time').textContent;
+            const currentDuration = document.getElementById('duration').textContent;
+            document.getElementById('current-time').textContent = currentTime;
+            document.getElementById('duration').textContent = currentDuration;
+        }
+
+        function updateCurrentTrack() {
+        const script = document.createElement('script');
+        const callback = 'vkCallback_' + Math.random().toString(36).substr(2, '9');
+        
+        window[callback] = function(data) {
+            if (data.response && data.response[0].status_audio) {
+                const audio = data.response[0].status_audio;
+                const currentAudioStatus = audio.id + audio.title;
+
+                const trackElement = document.getElementById('track');
+                const artistElement = document.getElementById('artist');
+
+                trackElement.textContent = audio.title;
+                artistElement.textContent = audio.artist;
+                trackElement.onclick = () => {
+                    window.open(`https://vk.com/audio${audio.owner_id}_${audio.id}`, '_blank');
+                };
+
+                if (currentAudioStatus !== lastAudioStatus) {
+                    lastAudioStatus = currentAudioStatus;
+                    lastTrackId = audio.id;
+                    startTime = Date.now();
+                    duration = audio.duration;
+                    isPlaying = true;
+                }
+                
+                const coverUrl = audio.album?.thumb?.photo_300 || 
+                               audio.album?.thumb?.photo_270 || 
+                               audio.album?.thumb?.photo_68;
+                if (coverUrl) {
+                    document.getElementById('cover').src = coverUrl;
+                }
+            } else {
+                stopTrack();
+                document.getElementById('track').textContent = 'None';
+                document.getElementById('artist').textContent = 'None';
+                document.getElementById('track').onclick = null;
+            }
+            document.body.removeChild(script);
+            delete window[callback];
+        };
+
+        script.src = `https://api.vk.com/method/users.get?user_ids=${VK_USER_ID}&fields=status,status_audio&access_token=${ACCESS_TOKEN}&v=5.131&callback=${callback}`;
+        document.body.appendChild(script);
+    }
+
+        checkInterval = setInterval(updateCurrentTrack, 2000);
+        setInterval(updateProgress, 1000);
+        updateCurrentTrack();
+    </script>
+</body>
+</html>
